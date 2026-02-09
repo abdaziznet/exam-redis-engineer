@@ -70,7 +70,7 @@ def create_role(db_uid, role_name, redis_acl):
     payload = {
         "name": role_name,
         "management": "none",
-        "roles_permissions": [
+        "databases": [
             {
                 "database_uid": db_uid,
                 "redis_acl": redis_acl
