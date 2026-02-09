@@ -46,9 +46,45 @@ def check_available_modules():
         return r.json()
     return []
 
+def get_available_redis_versions():
+    """Fetch available Redis versions from the cluster"""
+    r = requests.get(f"{BASE_URL}/v1/redis_versions", auth=auth, verify=False, timeout=30)
+    if r.status_code == 200:
+        return r.json()
+    return []
+
+def select_redis_version(available_versions, target_version: str):
+    """Pick the best Redis version from the cluster list."""
+    if not available_versions:
+        return target_version
+
+    # Normalize list to strings and prefer exact match
+    versions = [str(v) for v in available_versions]
+    if target_version in versions:
+        return target_version
+
+    # Prefer matching major.minor (e.g., 7.4) if exact patch not available
+    target_mm = ".".join(target_version.split(".")[:2])
+    for v in versions:
+        if v == target_mm:
+            return v
+
+    # Otherwise pick the highest version <= target_version
+    target_tuple = _parse_version(target_version)
+    parsed = [(v, _parse_version(v)) for v in versions]
+    parsed.sort(key=lambda x: x[1], reverse=True)
+    for v, t in parsed:
+        if t <= target_tuple:
+            return v
+
+    # Fallback to the highest available
+    return parsed[0][0]
+
 def create_search_db():
     """Create a single shard DB with Search and Query enabled"""
     modules = check_available_modules()
+    available_versions = get_available_redis_versions()
+    redis_version = select_redis_version(available_versions, TARGET_REDIS_VERSION)
     
     # Logic to find the best Search module UID for Redis 7.4.0
     module_uid = None
@@ -72,7 +108,7 @@ def create_search_db():
     payload = {
         "name": DB_NAME,
         "type": "redis",
-        "redis_version": TARGET_REDIS_VERSION,
+        "redis_version": redis_version,
         "memory_size": 536870912,  # 512MB
         "shards_count": 1,
         "replication": False,
@@ -83,7 +119,7 @@ def create_search_db():
         ]
     }
     
-    print(f"[Task 3] Creating Database '{DB_NAME}' using module 'search' (UID: {module_uid})...")
+    print(f"[Task 3] Creating Database '{DB_NAME}' using Redis {redis_version} and module 'search' (UID: {module_uid})...")
     r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False, timeout=30)
     
     if r.status_code >= 400:
