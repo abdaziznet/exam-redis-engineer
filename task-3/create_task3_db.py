@@ -220,21 +220,82 @@ def wait_and_get_port(db_uid):
     while True:
         r = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False, timeout=30)
         data = r.json()
-        if data["status"] == "active":
-            print(f"[Task 3] DB is ACTIVE on port: {data['port']}")
-            return data["port"]
+        if data.get("status") == "active":
+            port = data.get("port", 0)
+            if port:
+                print(f"[Task 3] DB is ACTIVE on port: {port}")
+                return port
+            print("[Task 3] DB is ACTIVE but port is 0, retrying...")
         time.sleep(2)
+
+def resolve_port_from_list(db_uid):
+    r_list = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False, timeout=30)
+    if r_list.status_code == 200:
+        for db in r_list.json():
+            if db.get("uid") == db_uid:
+                return db.get("port", 0)
+    return 0
+
+def find_db_uid_by_name(db_name: str):
+    r_list = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False, timeout=30)
+    if r_list.status_code == 200:
+        for db in r_list.json():
+            if db.get("name") == db_name:
+                return db.get("uid")
+    return None
+
+def delete_db_if_exists(db_name: str):
+    uid = find_db_uid_by_name(db_name)
+    if not uid:
+        return
+    print(f"[Task 3] Deleting existing DB '{db_name}' (UID: {uid})...")
+    r = requests.delete(f"{BASE_URL}/v1/bdbs/{uid}", auth=auth, verify=False, timeout=30)
+    if r.status_code >= 400:
+        print(f"[DEBUG] Error {r.status_code}: {r.text}")
+        r.raise_for_status()
+    # Wait until deletion is reflected in list
+    for _ in range(30):
+        if not find_db_uid_by_name(db_name):
+            print(f"[Task 3] DB '{db_name}' deleted.")
+            return
+        time.sleep(2)
+    print(f"[Task 3][WARN] DB '{db_name}' delete not confirmed yet, proceeding anyway.")
 
 if __name__ == "__main__":
     try:
+        delete_db_if_exists(DB_NAME)
         uid, port = create_search_db()
         if port == 0:
             port = wait_and_get_port(uid)
+        if port == 0:
+            port = resolve_port_from_list(uid)
         
         # Save connection info for semantic_router.py
         db_info_path = os.path.join(os.path.dirname(__file__), "db_info.json")
-        with open(db_info_path, "w") as f:
-            json.dump({"port": port}, f)
+        try:
+            with open(db_info_path, "w") as f:
+                json.dump({"port": port}, f)
+            print(f"[Task 3] Saved DB info to {db_info_path}")
+        except OSError:
+            # Fallback to current working directory or temp folder
+            fallback_paths = [
+                os.path.join(os.getcwd(), "db_info.json"),
+                os.path.join(os.getenv("TEMP", ""), "db_info.json")
+            ]
+            saved = False
+            for p in fallback_paths:
+                if not p:
+                    continue
+                try:
+                    with open(p, "w") as f:
+                        json.dump({"port": port}, f)
+                    print(f"[Task 3] Saved DB info to {p}")
+                    saved = True
+                    break
+                except OSError:
+                    continue
+            if not saved:
+                raise
             
     except Exception as e:
         print(f"Error: {e}")
