@@ -6,24 +6,59 @@ import os
 
 from config import BASE_URL, USERNAME, PASSWORD, HEADERS
 
+import urllib3
+
+# Suppress warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Update headers to include Accept
+HEADERS["Accept"] = "application/json"
+
 auth = (USERNAME, PASSWORD)
+
+def check_available_modules():
+    """Discover available modules on the cluster"""
+    print("[Task 3] Checking available modules on cluster...")
+    r = requests.get(f"{BASE_URL}/v1/modules", auth=auth, verify=False)
+    if r.status_code == 200:
+        modules = r.json()
+        print(f"[Task 3] Available Modules: {[m['name'] for m in modules]}")
+        return [m['name'] for m in modules]
+    else:
+        print(f"[Task 3] Could not fetch modules: {r.status_code}")
+        return []
 
 def create_search_db():
     """Create a single shard DB with Search and Query enabled"""
+    available = check_available_modules()
+    
+    # RediSearch could be named 'search' or 'RediSearch'
+    module_name = "search"
+    if "RediSearch" in available:
+        module_name = "RediSearch"
+    elif "search" not in available and available:
+        # If 'search' is not found, use the first one that looks like search
+        for m in available:
+            if "search" in m.lower():
+                module_name = m
+                break
+
     payload = {
         "name": "semantic-db",
         "type": "redis",
-        "memory_size": 1024 * 1024 * 512,  # 512MB is enough
+        "memory_size": 536870912,  # 512MB
         "shards_count": 1,
         "replication": False,
         "module_list": [
-            {"name": "search"}  # CRITICAL: Enabling RediSearch
-        ],
-        "resp3": True
+            {"name": module_name}
+        ]
     }
     
-    print("[Task 3] Creating Database 'semantic-db' with Search enabled...")
+    print(f"[Task 3] Creating Database 'semantic-db' using module '{module_name}'...")
     r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False)
+    
+    if r.status_code >= 400:
+        print(f"[DEBUG] Error {r.status_code}: {r.text}")
     
     if r.status_code == 409:
         print("[Task 3] Database already exists. Fetching info...")
