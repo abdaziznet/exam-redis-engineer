@@ -232,7 +232,8 @@ if __name__ == "__main__":
             port = wait_and_get_port(uid)
         
         # Save connection info for semantic_router.py
-        with open('db_info.json', 'w') as f:
+        db_info_path = os.path.join(os.path.dirname(__file__), "db_info.json")
+        with open(db_info_path, "w") as f:
             json.dump({"port": port}, f)
             
     except Exception as e:
