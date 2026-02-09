@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import time
+import tempfile
 
 import requests
 
@@ -304,26 +305,17 @@ if __name__ == "__main__":
             with open(db_info_path, "w") as f:
                 json.dump({"port": port}, f)
             print(f"[Task 3] Saved DB info to {db_info_path}")
-        except OSError:
-            # Fallback to current working directory or temp folder
-            fallback_paths = [
-                os.path.join(os.getcwd(), "db_info.json"),
-                os.path.join(os.getenv("TEMP", ""), "db_info.json")
-            ]
-            saved = False
-            for p in fallback_paths:
-                if not p:
-                    continue
-                try:
-                    with open(p, "w") as f:
-                        json.dump({"port": port}, f)
-                    print(f"[Task 3] Saved DB info to {p}")
-                    saved = True
-                    break
-                except OSError:
-                    continue
-            if not saved:
-                raise
+        except OSError as e:
+            print(f"[Task 3][WARN] Failed to write {db_info_path}: {e}")
+            # Fallback to temp folder
+            temp_path = os.path.join(tempfile.gettempdir(), "db_info.json")
+            try:
+                with open(temp_path, "w") as f:
+                    json.dump({"port": port}, f)
+                print(f"[Task 3] Saved DB info to {temp_path}")
+            except OSError as e2:
+                print(f"[Task 3][WARN] Failed to write {temp_path}: {e2}")
+                print(f"[Task 3][WARN] DB port is {port}. Update task-3/db_info.json manually if needed.")
             
     except Exception as e:
         print(f"Error: {e}")
