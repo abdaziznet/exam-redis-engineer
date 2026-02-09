@@ -217,15 +217,21 @@ def create_search_db():
 
 def wait_and_get_port(db_uid):
     print(f"[Task 3] Waiting for DB {db_uid} to become active...")
+    attempts = 0
+    max_attempts = 60
     while True:
         r = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False, timeout=30)
         data = r.json()
         if data.get("status") == "active":
-            port = data.get("port", 0)
+            port = _extract_port_from_bdb(data)
             if port:
                 print(f"[Task 3] DB is ACTIVE on port: {port}")
                 return port
             print("[Task 3] DB is ACTIVE but port is 0, retrying...")
+        attempts += 1
+        if attempts >= max_attempts:
+            print("[Task 3][WARN] Timed out waiting for port assignment.")
+            return 0
         time.sleep(2)
 
 def resolve_port_from_list(db_uid):
@@ -233,7 +239,29 @@ def resolve_port_from_list(db_uid):
     if r_list.status_code == 200:
         for db in r_list.json():
             if db.get("uid") == db_uid:
-                return db.get("port", 0)
+                return _extract_port_from_bdb(db)
+    return 0
+
+def _extract_port_from_bdb(bdb_info):
+    # Common field
+    port = bdb_info.get("port", 0)
+    if port:
+        return port
+    # Some APIs use endpoints list
+    endpoints = bdb_info.get("endpoints") or bdb_info.get("endpoint")
+    if isinstance(endpoints, list):
+        for ep in endpoints:
+            p = ep.get("port") or ep.get("tcp_port") or ep.get("ssl_port")
+            if p:
+                return p
+    if isinstance(endpoints, dict):
+        p = endpoints.get("port") or endpoints.get("tcp_port") or endpoints.get("ssl_port")
+        if p:
+            return p
+    # Another common field name
+    p = bdb_info.get("proxy_port") or bdb_info.get("external_port")
+    if p:
+        return p
     return 0
 
 def find_db_uid_by_name(db_name: str):
