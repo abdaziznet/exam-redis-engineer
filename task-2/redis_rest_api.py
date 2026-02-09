@@ -80,7 +80,15 @@ def create_role(db_uid, role_name, redis_acl):
                     acl_uid = rule["uid"]
                     break
     
-    # Step 2: Buat role minimal
+    # Step 1: Cek apakah role sudah ada (Idempotency)
+    r_existing = requests.get(f"{BASE_URL}/v1/roles", auth=auth, verify=False)
+    if r_existing.status_code == 200:
+        for r_item in r_existing.json():
+            if r_item["name"] == role_name:
+                print(f"Role [{role_name}] already exists with UID {r_item['uid']}. Reusing...")
+                return r_item["uid"]
+
+    # Step 2: Buat role minimal jika belum ada
     payload = {
         "name": role_name,
         "management": "none"
