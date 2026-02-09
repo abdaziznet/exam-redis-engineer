@@ -82,26 +82,39 @@ def create_role(db_uid, role_name, redis_acl):
         r.raise_for_status()
         role_uid = r.json()["uid"]
 
-    # 4. Link Role to Database (BDB)
-    r_db = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False)
-    db_data = r_db.json()
-    
-    current_permissions = db_data.get("roles_permissions", [])
-    
-    # Check if this role is already linked to avoid duplicates
-    is_linked = any(p.get("role_uid") == role_uid for p in current_permissions)
-    
-    if not is_linked:
+    # 4. Link Role to Database (BDB) with Retry Logic for 409 Conflicts
+    max_retries = 3
+    for attempt in range(max_retries):
+        r_db = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False)
+        db_data = r_db.json()
+        
+        current_permissions = db_data.get("roles_permissions", [])
+        
+        # Check if this role is already linked
+        is_linked = any(p.get("role_uid") == role_uid for p in current_permissions)
+        
+        if is_linked:
+            print(f"[Link] Role '{role_name}' already linked to DB {db_uid}")
+            break
+            
         current_permissions.append({
             "role_uid": role_uid,
             "redis_acl_uid": acl_uid
         })
+        
         update_payload = {"roles_permissions": current_permissions}
         r_update = requests.put(f"{BASE_URL}/v1/bdbs/{db_uid}", json=update_payload, headers=HEADERS, auth=auth, verify=False)
+        
+        if r_update.status_code == 409:
+            print(f"[Link] DB is busy (409). Retrying in 5s... (Attempt {attempt + 1}/{max_retries})")
+            time.sleep(5)
+            continue
+            
         print(f"[Link] Linking role '{role_name}' to DB {db_uid}... Status: {r_update.status_code}")
         r_update.raise_for_status()
+        break
     else:
-        print(f"[Link] Role '{role_name}' already linked to DB {db_uid}")
+        raise Exception(f"Failed to link role {role_name} after {max_retries} attempts due to 409 Conflict.")
 
     return role_uid
 
