@@ -55,6 +55,15 @@ def get_available_redis_versions():
 
 def _normalize_versions(available_versions):
     normalized = []
+    if isinstance(available_versions, dict):
+        # Common patterns: {"versions":[...]} or {"redis_versions":[...]}
+        if "versions" in available_versions:
+            available_versions = available_versions["versions"]
+        elif "redis_versions" in available_versions:
+            available_versions = available_versions["redis_versions"]
+        else:
+            available_versions = list(available_versions.values())
+
     for v in available_versions:
         if isinstance(v, str):
             normalized.append(v)
@@ -74,6 +83,8 @@ def select_redis_version(available_versions, target_version: str):
 
     # Normalize list to strings and prefer exact match
     versions = _normalize_versions(available_versions)
+    # De-duplicate while preserving order
+    versions = list(dict.fromkeys(versions))
     if target_version in versions:
         return target_version
 
@@ -101,6 +112,10 @@ def create_search_db():
     redis_version = select_redis_version(available_versions, TARGET_REDIS_VERSION)
     if redis_version != TARGET_REDIS_VERSION:
         print(f"[Task 3] Using Redis version {redis_version} from cluster (target was {TARGET_REDIS_VERSION})")
+    else:
+        print(f"[Task 3] Using Redis version {redis_version}")
+    if available_versions:
+        print(f"[Task 3] Cluster redis_versions: {available_versions}")
     
     # Logic to find the best Search module UID for Redis 7.4.0
     module_uid = None
@@ -130,7 +145,8 @@ def create_search_db():
         "replication": False,
         "module_list": [
             {
-                "module_name": "search"
+                "module_name": "search",
+                "module_uid": module_uid
             }
         ]
     }
