@@ -50,15 +50,20 @@ def create_search_db():
     payload = {
         "name": "semantic-db",
         "type": "redis",
+        "redis_version": "7.4", # Explicitly set version
         "memory_size": 536870912,  # 512MB
         "shards_count": 1,
         "replication": False,
         "module_list": [
-            {"uid": module_uid}  # Use UID for precision
-        ]
+            {
+                "name": "search", 
+                "uid": module_uid
+            }
+        ],
+        "resp3": True
     }
     
-    print(f"[Task 3] Creating Database 'semantic-db' using module UID '{module_uid}'...")
+    print(f"[Task 3] Creating Database 'semantic-db' using module 'search' with UID '{module_uid}'...")
     r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False)
     
     if r.status_code >= 400:
