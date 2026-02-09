@@ -9,7 +9,8 @@ import urllib3
 # Suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Load routes references
+# Load local configuration and route references
+from config import REDIS_HOST
 from embeddings.routes import ROUTES
 
 # 1. Initialize Embedding Model
@@ -22,7 +23,7 @@ if os.path.exists('db_info.json'):
     with open('db_info.json', 'r') as f:
         port = json.load(f).get('port', 12000)
 
-REDIS_URL = f"redis://re-cluster1.ps-redislabs.org:{port}"
+REDIS_URL = f"redis://{REDIS_HOST}:{port}"
 
 # 3. Define Vector Index Schema
 schema = IndexSchema.from_dict({

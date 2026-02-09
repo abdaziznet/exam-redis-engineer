@@ -4,8 +4,6 @@ import time
 import sys
 import os
 
-# Add task-2 to path to reuse config
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'task-2'))
 from config import BASE_URL, USERNAME, PASSWORD, HEADERS
 
 auth = (USERNAME, PASSWORD)
