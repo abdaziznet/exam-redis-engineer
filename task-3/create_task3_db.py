@@ -50,13 +50,13 @@ def create_search_db():
     payload = {
         "name": "semantic-db",
         "type": "redis",
-        "redis_version": "7.4", # Explicitly set version
+        "redis_version": "7.4",
         "memory_size": 536870912,  # 512MB
         "shards_count": 1,
         "replication": False,
         "module_list": [
             {
-                "name": "search", 
+                "module_name": "search", 
                 "uid": module_uid
             }
         ],
