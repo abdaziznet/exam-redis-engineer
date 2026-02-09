@@ -70,7 +70,7 @@ def create_role(db_uid, role_name, redis_acl):
     payload = {
         "name": role_name,
         "management": "none",
-        "redis_permissions": [
+        "permissions": [
             {
                 "bdb": db_uid,
                 "redis_acl": redis_acl
@@ -116,13 +116,23 @@ def check_api_schema():
         )
         print(f"Role {roles[0]['uid']} Detail Schema:", detail.text)
     
+    # Check acl_roles endpoint
+    r = requests.get(
+        f"{BASE_URL}/v1/acl_roles",
+        auth=auth,
+        verify=False
+    )
+    print("ACL Roles Response Status:", r.status_code)
+    if r.status_code == 200:
+        print("ACL Roles:", r.json())
+    
     # Check what fields are accepted
     r = requests.options(
         f"{BASE_URL}/v1/roles",
         auth=auth,
         verify=False
     )
-    print("OPTIONS:", r.headers)
+    print("OPTIONS ROLES:", r.headers)
 
 
 if __name__ == "__main__":
@@ -134,23 +144,26 @@ if __name__ == "__main__":
     wait_db_ready(db_uid, 60)
 
     # Create roles
-    viewer_role = create_role(
-        db_uid,
-        "db_viewer",
-        "+@read -@write"
-    )
+    try:
+        viewer_role = create_role(
+            db_uid,
+            "db_viewer",
+            "+@read -@write"
+        )
 
-    member_role = create_role(
-        db_uid,
-        "db_member",
-        "+@all"
-    )
+        member_role = create_role(
+            db_uid,
+            "db_member",
+            "+@all"
+        )
+        
+        # Create users
+        create_new_user("john.doe@example.com", "John Doe", viewer_role)
+        create_new_user("mike.smith@example.com", "Mike Smith", member_role)
+        create_new_user("cary.johnson@example.com", "Cary Johnson", 1)
 
-
-    # Create users
-    create_new_user("john.doe@example.com", "John Doe", viewer_role)
-    create_new_user("mike.smith@example.com", "Mike Smith", member_role)
-    create_new_user("cary.johnson@example.com", "Cary Johnson", 1)
+    except Exception as e:
+        print(f"FAILED TO COMPLETE STEPS: {e}")
 
     list_users()
     #delete_database(db_uid)
