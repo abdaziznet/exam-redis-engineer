@@ -67,12 +67,31 @@ def wait_db_ready(db_uid, timeout=60):
     raise TimeoutError("Database not ready in time")
 
 def create_role(db_uid, role_name, redis_acl):
+    # Step A: Coba buat role "kosong" dulu untuk melihat schema asli
+    test_payload = {
+        "name": role_name + "_test",
+        "management": "none"
+    }
+    
+    print(f"DEBUG: Probing schema with minimal payload...")
+    r_test = requests.post(f"{BASE_URL}/v1/roles", json=test_payload, headers=HEADERS, auth=auth, verify=False)
+    
+    if r_test.status_code < 300:
+        uid = r_test.json()["uid"]
+        # Ambil detail role kosong ini untuk melihat field yang tersedia
+        r_schema = requests.get(f"{BASE_URL}/v1/roles/{uid}", auth=auth, verify=False)
+        print(f"DETECTED SCHEMA for Role {role_name}:", r_schema.text)
+        # Hapus role test setelah inspeksi
+        requests.delete(f"{BASE_URL}/v1/roles/{uid}", auth=auth, verify=False)
+
+    # Step B: Gunakan struktur yang kita duga paling mungkin untuk 7.4: 'acl_rules' atau 'databases'
+    # Berdasarkan pengalaman 7.4, terkadang field-nya adalah 'acl_rules'
     payload = {
         "name": role_name,
         "management": "none",
-        "permissions": [
+        "acl_rules": [
             {
-                "bdb": db_uid,
+                "bdb_uid": db_uid,
                 "redis_acl": redis_acl
             }
         ]
@@ -89,6 +108,17 @@ def create_role(db_uid, role_name, redis_acl):
     print(f"CREATE ROLE [{role_name}]:", r.status_code)
     if r.status_code >= 400:
         print("ERROR:", r.text)
+        # Jika 'acl_rules' gagal, coba 'databases' dengan struktur UID
+        print("Trying alternative: 'databases' with 'uid'...")
+        alt_payload = {
+            "name": role_name,
+            "management": "none",
+            "databases": [{"uid": db_uid, "redis_acl": redis_acl}]
+        }
+        r = requests.post(f"{BASE_URL}/v1/roles", json=alt_payload, headers=HEADERS, auth=auth, verify=False)
+        print(f"RETRY ROLE [{role_name}]:", r.status_code)
+        if r.status_code >= 400:
+            print("ERROR RETRY:", r.text)
 
     r.raise_for_status()
     return r.json()["uid"]
