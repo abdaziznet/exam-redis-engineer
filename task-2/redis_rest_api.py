@@ -67,61 +67,48 @@ def wait_db_ready(db_uid, timeout=60):
     raise TimeoutError("Database not ready in time")
 
 def create_role(db_uid, role_name, redis_acl):
-    # Step A: Coba buat role "kosong" dulu untuk melihat schema asli
-    test_payload = {
-        "name": role_name + "_test",
+    # Step 1: Buat role minimal
+    payload = {
+        "name": role_name,
         "management": "none"
     }
     
-    print(f"DEBUG: Probing schema with minimal payload...")
-    r_test = requests.post(f"{BASE_URL}/v1/roles", json=test_payload, headers=HEADERS, auth=auth, verify=False)
-    
-    if r_test.status_code < 300:
-        uid = r_test.json()["uid"]
-        # Ambil detail role kosong ini untuk melihat field yang tersedia
-        r_schema = requests.get(f"{BASE_URL}/v1/roles/{uid}", auth=auth, verify=False)
-        print(f"DETECTED SCHEMA for Role {role_name}:", r_schema.text)
-        # Hapus role test setelah inspeksi
-        requests.delete(f"{BASE_URL}/v1/roles/{uid}", auth=auth, verify=False)
+    r = requests.post(f"{BASE_URL}/v1/roles", json=payload, headers=HEADERS, auth=auth, verify=False)
+    print(f"CREATE ROLE BASE [{role_name}]:", r.status_code)
+    r.raise_for_status()
+    role_uid = r.json()["uid"]
 
-    # Step B: Gunakan struktur yang kita duga paling mungkin untuk 7.4: 'acl_rules' atau 'databases'
-    # Berdasarkan pengalaman 7.4, terkadang field-nya adalah 'acl_rules'
-    payload = {
-        "name": role_name,
-        "management": "none",
-        "acl_rules": [
-            {
-                "bdb_uid": db_uid,
-                "redis_acl": redis_acl
-            }
-        ]
+    # Step 2: Update Database (BDB) untuk menyertakan role ini dengan ACL-nya
+    # Ambil data BDB saat ini dulu
+    r_db = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False)
+    db_data = r_db.json()
+    
+    # Tambahkan role baru ke list roles_permissions yang sudah ada
+    current_permissions = db_data.get("roles_permissions", [])
+    current_permissions.append({
+        "role_uid": role_uid,
+        "redis_acl": redis_acl
+    })
+
+    update_payload = {
+        "roles_permissions": current_permissions
     }
 
-    r = requests.post(
-        f"{BASE_URL}/v1/roles",
-        json=payload,
+    print(f"LINKING ROLE {role_name} TO DB {db_uid}...")
+    r_update = requests.put(
+        f"{BASE_URL}/v1/bdbs/{db_uid}",
+        json=update_payload,
         headers=HEADERS,
         auth=auth,
         verify=False
     )
-
-    print(f"CREATE ROLE [{role_name}]:", r.status_code)
-    if r.status_code >= 400:
-        print("ERROR:", r.text)
-        # Jika 'acl_rules' gagal, coba 'databases' dengan struktur UID
-        print("Trying alternative: 'databases' with 'uid'...")
-        alt_payload = {
-            "name": role_name,
-            "management": "none",
-            "databases": [{"uid": db_uid, "redis_acl": redis_acl}]
-        }
-        r = requests.post(f"{BASE_URL}/v1/roles", json=alt_payload, headers=HEADERS, auth=auth, verify=False)
-        print(f"RETRY ROLE [{role_name}]:", r.status_code)
-        if r.status_code >= 400:
-            print("ERROR RETRY:", r.text)
-
-    r.raise_for_status()
-    return r.json()["uid"]
+    
+    print(f"LINK ROLE STATUS:", r_update.status_code)
+    if r_update.status_code >= 400:
+        print("LINK ERROR:", r_update.text)
+    
+    r_update.raise_for_status()
+    return role_uid
 
 
 def delete_database(db_id):
@@ -136,25 +123,6 @@ def check_api_schema():
     )
     roles = r.json()
     print("Existing roles summary:", roles)
-    
-    if roles:
-        # Get details of the first role to see the schema
-        detail = requests.get(
-            f"{BASE_URL}/v1/roles/{roles[0]['uid']}",
-            auth=auth,
-            verify=False
-        )
-        print(f"Role {roles[0]['uid']} Detail Schema:", detail.text)
-    
-    # Check acl_roles endpoint
-    r = requests.get(
-        f"{BASE_URL}/v1/acl_roles",
-        auth=auth,
-        verify=False
-    )
-    print("ACL Roles Response Status:", r.status_code)
-    if r.status_code == 200:
-        print("ACL Roles:", r.json())
     
     # Check what fields are accepted
     r = requests.options(
