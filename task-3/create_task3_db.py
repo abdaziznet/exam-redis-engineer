@@ -21,34 +21,31 @@ def check_available_modules():
     print("[Task 3] Checking available modules on cluster...")
     r = requests.get(f"{BASE_URL}/v1/modules", auth=auth, verify=False)
     if r.status_code == 200:
-        modules = r.json()
-        print(f"DEBUG Modules Response: {modules}")
-        try:
-            # Try different possible key names or formats
-            if isinstance(modules, list):
-                return [m.get('module_name') or m.get('name') for m in modules if (m.get('module_name') or m.get('name'))]
-            return []
-        except Exception as e:
-            print(f"Parsing error: {e}")
-            return []
-    else:
-        print(f"[Task 3] Could not fetch modules: {r.status_code} - {r.text}")
-        return []
+        return r.json()
+    return []
 
 def create_search_db():
     """Create a single shard DB with Search and Query enabled"""
-    available = check_available_modules()
+    modules = check_available_modules()
     
-    # RediSearch could be named 'search' or 'RediSearch'
-    module_name = "search"
-    if "RediSearch" in available:
-        module_name = "RediSearch"
-    elif "search" not in available and available:
-        # If 'search' is not found, use the first one that looks like search
-        for m in available:
-            if "search" in m.lower():
-                module_name = m
+    # Logic to find the best Search module UID for Redis 7.4
+    module_uid = None
+    for m in modules:
+        # Search for module named 'search' and compatible with 7.4
+        if m.get('module_name') == 'search' and m.get('min_redis_version') == '7.4':
+            module_uid = m.get('uid')
+            print(f"[Task 3] Found Search Module for 7.4 (UID: {module_uid})")
+            break
+    
+    # Fallback to any 'search' module if 7.4 specific not found
+    if not module_uid:
+        for m in modules:
+            if m.get('module_name') == 'search':
+                module_uid = m.get('uid')
                 break
+
+    if not module_uid:
+        raise Exception("Search module (RediSearch) not found in cluster modules list.")
 
     payload = {
         "name": "semantic-db",
@@ -57,11 +54,11 @@ def create_search_db():
         "shards_count": 1,
         "replication": False,
         "module_list": [
-            {"name": module_name}
+            {"uid": module_uid}  # Use UID for precision
         ]
     }
     
-    print(f"[Task 3] Creating Database 'semantic-db' using module '{module_name}'...")
+    print(f"[Task 3] Creating Database 'semantic-db' using module UID '{module_uid}'...")
     r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False)
     
     if r.status_code >= 400:
