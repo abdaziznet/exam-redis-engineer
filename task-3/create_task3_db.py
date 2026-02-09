@@ -128,6 +128,8 @@ def _build_candidate_versions(selected_version: str, target_version: str):
         target_mm = ".".join(target_version.split(".")[:2])
         if target_mm and target_mm not in candidates:
             candidates.append(target_mm)
+    # Final fallback: let the server choose default version
+    candidates.append(None)
     return candidates
 
 def create_search_db():
@@ -170,7 +172,8 @@ def create_search_db():
         "module_list": [
             {
                 "module_name": "search",
-                "module_uid": module_uid
+                "module_uid": module_uid,
+                "module_args": ""
             }
         ]
     }
@@ -179,8 +182,11 @@ def create_search_db():
     last_error = None
     for version in candidates:
         payload = dict(base_payload)
-        payload["redis_version"] = version
-        print(f"[Task 3] Creating Database '{DB_NAME}' using Redis {version} and module 'search' (UID: {module_uid})...")
+        if version:
+            payload["redis_version"] = version
+            print(f"[Task 3] Creating Database '{DB_NAME}' using Redis {version} and module 'search' (UID: {module_uid})...")
+        else:
+            print(f"[Task 3] Creating Database '{DB_NAME}' using server default Redis version and module 'search' (UID: {module_uid})...")
         r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False, timeout=30)
 
         if r.status_code == 409:
