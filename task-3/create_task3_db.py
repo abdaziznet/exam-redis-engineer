@@ -46,11 +46,24 @@ def check_available_modules():
         return r.json()
     return []
 
-def get_available_redis_versions():
-    """Fetch available Redis versions from the cluster"""
-    r = requests.get(f"{BASE_URL}/v1/redis_versions", auth=auth, verify=False, timeout=30)
+def _fetch_redis_versions(url: str):
+    r = requests.get(url, auth=auth, verify=False, timeout=30)
     if r.status_code == 200:
         return r.json()
+    print(f"[Task 3][DEBUG] redis_versions endpoint {url} -> {r.status_code}: {r.text}")
+    return None
+
+def get_available_redis_versions():
+    """Fetch available Redis versions from the cluster"""
+    candidates = [
+        f"{BASE_URL}/v1/redis_versions",
+        f"{BASE_URL}/v1/redis-versions",
+        f"{BASE_URL}/v1/redis/versions",
+    ]
+    for url in candidates:
+        data = _fetch_redis_versions(url)
+        if data is not None:
+            return data
     return []
 
 def _normalize_versions(available_versions):
@@ -105,6 +118,18 @@ def select_redis_version(available_versions, target_version: str):
     # Fallback to the highest available
     return parsed[0][0]
 
+def _build_candidate_versions(selected_version: str, target_version: str):
+    candidates = []
+    if selected_version:
+        candidates.append(selected_version)
+    if target_version and target_version not in candidates:
+        candidates.append(target_version)
+    if target_version:
+        target_mm = ".".join(target_version.split(".")[:2])
+        if target_mm and target_mm not in candidates:
+            candidates.append(target_mm)
+    return candidates
+
 def create_search_db():
     """Create a single shard DB with Search and Query enabled"""
     modules = check_available_modules()
@@ -136,10 +161,9 @@ def create_search_db():
     if not module_uid:
         raise Exception("Search module (RediSearch) not found in cluster modules list.")
 
-    payload = {
+    base_payload = {
         "name": DB_NAME,
         "type": "redis",
-        "redis_version": redis_version,
         "memory_size": 536870912,  # 512MB
         "shards_count": 1,
         "replication": False,
@@ -150,23 +174,40 @@ def create_search_db():
             }
         ]
     }
-    
-    print(f"[Task 3] Creating Database '{DB_NAME}' using Redis {redis_version} and module 'search' (UID: {module_uid})...")
-    r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False, timeout=30)
-    
-    if r.status_code >= 400:
-        print(f"[DEBUG] Error {r.status_code}: {r.text}")
-    
-    if r.status_code == 409:
-        print("[Task 3] Database already exists. Fetching info...")
-        r_list = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False, timeout=30)
-        for db in r_list.json():
-            if db["name"] == DB_NAME:
-                return db["uid"], db["port"]
-                
-    r.raise_for_status()
-    db_info = r.json()
-    return db_info["uid"], db_info.get("port", 0)
+
+    candidates = _build_candidate_versions(redis_version, TARGET_REDIS_VERSION)
+    last_error = None
+    for version in candidates:
+        payload = dict(base_payload)
+        payload["redis_version"] = version
+        print(f"[Task 3] Creating Database '{DB_NAME}' using Redis {version} and module 'search' (UID: {module_uid})...")
+        r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False, timeout=30)
+
+        if r.status_code == 409:
+            print("[Task 3] Database already exists. Fetching info...")
+            r_list = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False, timeout=30)
+            for db in r_list.json():
+                if db["name"] == DB_NAME:
+                    return db["uid"], db["port"]
+
+        if r.status_code >= 400:
+            print(f"[DEBUG] Error {r.status_code}: {r.text}")
+            last_error = r
+            # Try next candidate if invalid_version
+            try:
+                err = r.json()
+            except Exception:
+                err = {}
+            if err.get("error_code") == "invalid_version":
+                continue
+
+        r.raise_for_status()
+        db_info = r.json()
+        return db_info["uid"], db_info.get("port", 0)
+
+    if last_error is not None:
+        last_error.raise_for_status()
+    raise Exception("Failed to create DB with available Redis versions.")
 
 def wait_and_get_port(db_uid):
     print(f"[Task 3] Waiting for DB {db_uid} to become active...")
