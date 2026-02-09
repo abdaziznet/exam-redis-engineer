@@ -67,7 +67,20 @@ def wait_db_ready(db_uid, timeout=60):
     raise TimeoutError("Database not ready in time")
 
 def create_role(db_uid, role_name, redis_acl):
-    # Step 1: Buat role minimal
+    # Step 1: Dapatkan ACL UID (Default atau cari dari list)
+    # Di Redis Enterprise 7.x, kita perlu UID dari ACL Rule.
+    # Kita akan mencoba mencari ACL yang cocok atau menggunakan default '1' (All) atau '2' (Read-Only) jika tersedia.
+    acl_uid = 1 # Default to All
+    if "+@read -@write" in redis_acl:
+        # Biasanya read-only rule ada di daftar, kita coba cari
+        r_acls = requests.get(f"{BASE_URL}/v1/acl_rules", auth=auth, verify=False)
+        if r_acls.status_code == 200:
+            for rule in r_acls.json():
+                if rule.get("rule") == redis_acl or "read" in rule.get("name", "").lower():
+                    acl_uid = rule["uid"]
+                    break
+    
+    # Step 2: Buat role minimal
     payload = {
         "name": role_name,
         "management": "none"
@@ -78,23 +91,21 @@ def create_role(db_uid, role_name, redis_acl):
     r.raise_for_status()
     role_uid = r.json()["uid"]
 
-    # Step 2: Update Database (BDB) untuk menyertakan role ini dengan ACL-nya
-    # Ambil data BDB saat ini dulu
+    # Step 3: Update Database (BDB)
     r_db = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False)
     db_data = r_db.json()
     
-    # Tambahkan role baru ke list roles_permissions yang sudah ada
     current_permissions = db_data.get("roles_permissions", [])
     current_permissions.append({
         "role_uid": role_uid,
-        "redis_acl": redis_acl
+        "redis_acl_uid": acl_uid  # Menggunakan UID sesuai permintaan error
     })
 
     update_payload = {
         "roles_permissions": current_permissions
     }
 
-    print(f"LINKING ROLE {role_name} TO DB {db_uid}...")
+    print(f"LINKING ROLE {role_name} (ACL UID {acl_uid}) TO DB {db_uid}...")
     r_update = requests.put(
         f"{BASE_URL}/v1/bdbs/{db_uid}",
         json=update_payload,
