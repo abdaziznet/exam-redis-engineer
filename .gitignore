@@ -1,0 +1,51 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.env.*
+.venv/
+
+# Python build / test
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# =========================
+# Redis
+# =========================
+# Redis dump & persistence
+dump.rdb
+appendonly.aof
+
+# Redis config override / local
+redis.conf
+redis.local.conf
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# =========================
+# Secrets
+# =========================
+*.env
+*.secret
