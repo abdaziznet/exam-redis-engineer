@@ -104,7 +104,17 @@ def check_api_schema():
         auth=auth,
         verify=False
     )
-    print("Existing roles:", r.json())
+    roles = r.json()
+    print("Existing roles summary:", roles)
+    
+    if roles:
+        # Get details of the first role to see the schema
+        detail = requests.get(
+            f"{BASE_URL}/v1/roles/{roles[0]['uid']}",
+            auth=auth,
+            verify=False
+        )
+        print(f"Role {roles[0]['uid']} Detail Schema:", detail.text)
     
     # Check what fields are accepted
     r = requests.options(
