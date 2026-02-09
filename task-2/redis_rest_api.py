@@ -125,15 +125,15 @@ if __name__ == "__main__":
 
     # Create roles
     viewer_role = create_role(
-    db_uid,
-    "db_viewer",
-    "+@read -@write"
+        db_uid,
+        "db_viewer",
+        "+@read -@write"
     )
 
     member_role = create_role(
-    db_uid,
-    "db_member",
-    "+@all"
+        db_uid,
+        "db_member",
+        "+@all"
     )
 
 
@@ -143,4 +143,4 @@ if __name__ == "__main__":
     create_new_user("cary.johnson@example.com", "Cary Johnson", 1)
 
     list_users()
-    delete_database(db_uid)
+    #delete_database(db_uid)
