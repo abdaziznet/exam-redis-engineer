@@ -56,8 +56,9 @@ def create_search_db():
         "replication": False,
         "module_list": [
             {
-                "module_name": "search", 
-                "uid": module_uid
+                "name": "search", 
+                "uid": module_uid,
+                "module_args": "" # Mandatory field for some v7.x schemas
             }
         ],
         "resp3": True
