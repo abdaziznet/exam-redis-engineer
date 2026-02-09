@@ -97,7 +97,28 @@ def create_role(db_uid, role_name, redis_acl):
 def delete_database(db_id):
     requests.delete(f"{BASE_URL}/v1/bdbs/{db_id}", auth=auth,  verify=False)
 
+def check_api_schema():
+    """Get role schema to see available fields"""
+    r = requests.get(
+        f"{BASE_URL}/v1/roles",
+        auth=auth,
+        verify=False
+    )
+    print("Existing roles:", r.json())
+    
+    # Check what fields are accepted
+    r = requests.options(
+        f"{BASE_URL}/v1/roles",
+        auth=auth,
+        verify=False
+    )
+    print("OPTIONS:", r.headers)
+
+
 if __name__ == "__main__":
+
+    check_api_schema()
+
     db_uid = create_database()
 
     wait_db_ready(db_uid, 60)
