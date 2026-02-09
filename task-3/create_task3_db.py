@@ -22,10 +22,17 @@ def check_available_modules():
     r = requests.get(f"{BASE_URL}/v1/modules", auth=auth, verify=False)
     if r.status_code == 200:
         modules = r.json()
-        print(f"[Task 3] Available Modules: {[m['name'] for m in modules]}")
-        return [m['name'] for m in modules]
+        print(f"DEBUG Modules Response: {modules}")
+        try:
+            # Try different possible key names or formats
+            if isinstance(modules, list):
+                return [m.get('module_name') or m.get('name') for m in modules if (m.get('module_name') or m.get('name'))]
+            return []
+        except Exception as e:
+            print(f"Parsing error: {e}")
+            return []
     else:
-        print(f"[Task 3] Could not fetch modules: {r.status_code}")
+        print(f"[Task 3] Could not fetch modules: {r.status_code} - {r.text}")
         return []
 
 def create_search_db():
