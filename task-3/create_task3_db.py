@@ -1,8 +1,9 @@
-import requests
 import json
-import time
-import sys
 import os
+import sys
+import time
+
+import requests
 
 from config import BASE_URL, USERNAME, PASSWORD, HEADERS
 
@@ -16,10 +17,31 @@ HEADERS["Accept"] = "application/json"
 
 auth = (USERNAME, PASSWORD)
 
+TARGET_REDIS_VERSION = "7.4.0"
+DB_NAME = "semantic-db"
+
+def _parse_version(version_str: str):
+    try:
+        parts = [int(p) for p in version_str.split(".")]
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts[:3])
+    except Exception:
+        return (0, 0, 0)
+
+def _is_version_compatible(module_info, target_version: str):
+    target = _parse_version(target_version)
+    min_v = _parse_version(str(module_info.get("min_redis_version", "0.0.0")))
+    max_v_raw = module_info.get("max_redis_version")
+    if max_v_raw:
+        max_v = _parse_version(str(max_v_raw))
+        return min_v <= target <= max_v
+    return min_v <= target
+
 def check_available_modules():
     """Discover available modules on the cluster"""
     print("[Task 3] Checking available modules on cluster...")
-    r = requests.get(f"{BASE_URL}/v1/modules", auth=auth, verify=False)
+    r = requests.get(f"{BASE_URL}/v1/modules", auth=auth, verify=False, timeout=30)
     if r.status_code == 200:
         return r.json()
     return []
@@ -28,29 +50,29 @@ def create_search_db():
     """Create a single shard DB with Search and Query enabled"""
     modules = check_available_modules()
     
-    # Logic to find the best Search module UID for Redis 7.4
+    # Logic to find the best Search module UID for Redis 7.4.0
     module_uid = None
     for m in modules:
-        # Search for module named 'search' and compatible with 7.4
-        if m.get('module_name') == 'search' and m.get('min_redis_version') == '7.4':
-            module_uid = m.get('uid')
-            print(f"[Task 3] Found Search Module for 7.4 (UID: {module_uid})")
+        # Search for module named 'search' and compatible with 7.4.0
+        if m.get("module_name") == "search" and _is_version_compatible(m, TARGET_REDIS_VERSION):
+            module_uid = m.get("uid")
+            print(f"[Task 3] Found Search Module compatible with {TARGET_REDIS_VERSION} (UID: {module_uid})")
             break
     
     # Fallback to any 'search' module if 7.4 specific not found
     if not module_uid:
         for m in modules:
-            if m.get('module_name') == 'search':
-                module_uid = m.get('uid')
+            if m.get("module_name") == "search":
+                module_uid = m.get("uid")
                 break
 
     if not module_uid:
         raise Exception("Search module (RediSearch) not found in cluster modules list.")
 
     payload = {
-        "name": "semantic-db",
+        "name": DB_NAME,
         "type": "redis",
-        "redis_version": "7.4",
+        "redis_version": TARGET_REDIS_VERSION,
         "memory_size": 536870912,  # 512MB
         "shards_count": 1,
         "replication": False,
@@ -61,18 +83,18 @@ def create_search_db():
         ]
     }
     
-    print(f"[Task 3] Creating Database 'semantic-db' using module 'search' with UID '{module_uid}'...")
-    r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False)
+    print(f"[Task 3] Creating Database '{DB_NAME}' using module 'search' (UID: {module_uid})...")
+    r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False, timeout=30)
     
     if r.status_code >= 400:
         print(f"[DEBUG] Error {r.status_code}: {r.text}")
     
     if r.status_code == 409:
         print("[Task 3] Database already exists. Fetching info...")
-        r_list = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False)
+        r_list = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False, timeout=30)
         for db in r_list.json():
-            if db['name'] == "semantic-db":
-                return db['uid'], db['port']
+            if db["name"] == DB_NAME:
+                return db["uid"], db["port"]
                 
     r.raise_for_status()
     db_info = r.json()
@@ -81,7 +103,7 @@ def create_search_db():
 def wait_and_get_port(db_uid):
     print(f"[Task 3] Waiting for DB {db_uid} to become active...")
     while True:
-        r = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False)
+        r = requests.get(f"{BASE_URL}/v1/bdbs/{db_uid}", auth=auth, verify=False, timeout=30)
         data = r.json()
         if data["status"] == "active":
             print(f"[Task 3] DB is ACTIVE on port: {data['port']}")

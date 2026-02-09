@@ -1,16 +1,17 @@
 import json
 import os
 import sys
+
+import urllib3
 from redisvl.index import SearchIndex
 from redisvl.schema import IndexSchema
 from sentence_transformers import SentenceTransformer
-import urllib3
 
 # Suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Load local configuration and route references
-from config import REDIS_HOST
+from config import REDIS_HOST, REDIS_PW
 from embeddings.routes import ROUTES
 
 # 1. Initialize Embedding Model
@@ -18,12 +19,17 @@ from embeddings.routes import ROUTES
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # 2. Get Database Connection Info
-port = 12000 # Default fallback
-if os.path.exists('db_info.json'):
-    with open('db_info.json', 'r') as f:
-        port = json.load(f).get('port', 12000)
+default_port = 12000
+db_info_path = os.path.join(os.path.dirname(__file__), "db_info.json")
+port = default_port
+if os.path.exists(db_info_path):
+    with open(db_info_path, "r") as f:
+        port = json.load(f).get("port", default_port)
 
-REDIS_URL = f"redis://{REDIS_HOST}:{port}"
+if REDIS_PW:
+    REDIS_URL = f"redis://:{REDIS_PW}@{REDIS_HOST}:{port}"
+else:
+    REDIS_URL = f"redis://{REDIS_HOST}:{port}"
 
 # 3. Define Vector Index Schema
 schema = IndexSchema.from_dict({
