@@ -56,12 +56,9 @@ def create_search_db():
         "replication": False,
         "module_list": [
             {
-                "name": "search", 
-                "uid": module_uid,
-                "module_args": "" # Mandatory field for some v7.x schemas
+                "module_name": "search"
             }
-        ],
-        "resp3": True
+        ]
     }
     
     print(f"[Task 3] Creating Database 'semantic-db' using module 'search' with UID '{module_uid}'...")
