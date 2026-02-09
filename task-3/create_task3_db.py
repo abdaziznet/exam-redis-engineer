@@ -53,13 +53,27 @@ def get_available_redis_versions():
         return r.json()
     return []
 
+def _normalize_versions(available_versions):
+    normalized = []
+    for v in available_versions:
+        if isinstance(v, str):
+            normalized.append(v)
+        elif isinstance(v, dict):
+            if "version" in v:
+                normalized.append(str(v["version"]))
+            elif "name" in v:
+                normalized.append(str(v["name"]))
+        else:
+            normalized.append(str(v))
+    return normalized
+
 def select_redis_version(available_versions, target_version: str):
     """Pick the best Redis version from the cluster list."""
     if not available_versions:
         return target_version
 
     # Normalize list to strings and prefer exact match
-    versions = [str(v) for v in available_versions]
+    versions = _normalize_versions(available_versions)
     if target_version in versions:
         return target_version
 
@@ -85,14 +99,16 @@ def create_search_db():
     modules = check_available_modules()
     available_versions = get_available_redis_versions()
     redis_version = select_redis_version(available_versions, TARGET_REDIS_VERSION)
+    if redis_version != TARGET_REDIS_VERSION:
+        print(f"[Task 3] Using Redis version {redis_version} from cluster (target was {TARGET_REDIS_VERSION})")
     
     # Logic to find the best Search module UID for Redis 7.4.0
     module_uid = None
     for m in modules:
         # Search for module named 'search' and compatible with 7.4.0
-        if m.get("module_name") == "search" and _is_version_compatible(m, TARGET_REDIS_VERSION):
+        if m.get("module_name") == "search" and _is_version_compatible(m, redis_version):
             module_uid = m.get("uid")
-            print(f"[Task 3] Found Search Module compatible with {TARGET_REDIS_VERSION} (UID: {module_uid})")
+            print(f"[Task 3] Found Search Module compatible with {redis_version} (UID: {module_uid})")
             break
     
     # Fallback to any 'search' module if 7.4 specific not found
