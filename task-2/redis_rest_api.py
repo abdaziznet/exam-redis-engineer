@@ -177,6 +177,19 @@ def list_users():
         print(f"Name: {u['name']:<15} | Roles: {str(u['role_uids']):<10} | Email: {u['email']}")
     print("="*50 + "\n")
 
+def list_users_2():
+    """List all current users in the cluster"""
+    print("\n" + "="*50)
+    print("CURRENT CLUSTER USERS")
+    print("="*50)
+    r = requests.get(f"{BASE_URL}/v1/users", auth=auth, verify=False)
+    
+    for u in r.json():
+        print(f"\n[DEBUG] Full user object for {u['email']}:")
+        print(f"  {u}")  # Print full object to see all fields
+        print(f"Name: {u['name']:<15} | Role UIDs: {str(u['role_uids']):<10} | Email: {u['email']}")
+    print("="*50 + "\n")
+
 # Tambahkan ini di awal script untuk debugging
 def check_existing_databases():
     """Check what databases already exist"""
@@ -209,6 +222,7 @@ if __name__ == "__main__":
 
         # 4. Results
         list_users()
+        list_users_2()
 
         # 5. Cleanup (Commented as per request to keep the result visible)
         # delete_database(db_uid)
