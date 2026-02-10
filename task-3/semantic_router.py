@@ -4,6 +4,7 @@ import sys
 
 import urllib3
 import numpy as np
+import redis
 from redisvl.index import SearchIndex
 from redisvl.schema import IndexSchema
 from sentence_transformers import SentenceTransformer
@@ -60,6 +61,8 @@ def setup_router():
     
     # Create index in Redis (requires RediSearch module)
     index.create(overwrite=True)
+
+    client = redis.Redis.from_url(REDIS_URL)
     
     # Process each route's references
     data_to_load = []
@@ -74,38 +77,48 @@ def setup_router():
             }
             data_to_load.append(doc)
 
-    # Debug: ensure no list values sneak in
-    for i, doc in enumerate(data_to_load[:5]):
-        for k, v in doc.items():
-            if isinstance(v, list):
-                raise TypeError(f"Found list in doc[{i}]['{k}']")
-    
-    index.load(data_to_load)
-    return index
+    pipe = client.pipeline()
+    for i, doc in enumerate(data_to_load):
+        key = f"route:{i}"
+        pipe.hset(key, mapping=doc)
+    pipe.execute()
 
-def route_query(index, query: str):
+    return index, client
+
+def route_query(client, query: str):
     """Find the best route for a given query"""
     # Convert query to vector
     query_embedding = _to_embedding_bytes(model.encode(query))
     
-    # Perform Vector Similarity Search (VSS)
-    results = index.query(
-        vector=query_embedding,
-        vector_field="embedding",
-        return_fields=["route_name"],
-        num_results=1
+    # Perform Vector Similarity Search (VSS) via FT.SEARCH
+    res = client.execute_command(
+        "FT.SEARCH",
+        "semantic-router-index",
+        "*=>[KNN 1 @embedding $vec AS score]",
+        "PARAMS", 2, "vec", query_embedding,
+        "RETURN", 1, "route_name",
+        "SORTBY", "score",
+        "DIALECT", 2
     )
-    
-    if results.docs:
-        # AS PER REQUIREMENT: Show only the name of the route
-        print(results.docs[0].route_name)
+
+    if res and res[0] > 0:
+        fields = res[2]
+        route_name = None
+        for i in range(0, len(fields), 2):
+            if fields[i] == "route_name":
+                route_name = fields[i + 1]
+                break
+        if route_name is not None:
+            print(route_name)
+        else:
+            print("No suitable route found")
     else:
         print("No suitable route found")
 
 if __name__ == "__main__":
     try:
         # Initialize and load data
-        idx = setup_router()
+        idx, client = setup_router()
         
         # Test Queries
         test_queries = [
@@ -116,7 +129,7 @@ if __name__ == "__main__":
         
         for q in test_queries:
             # print(f"Query: '{q}' -> Route: ", end="")
-            route_query(idx, q)
+            route_query(client, q)
             
     except Exception as e:
         print(f"Error in Semantic Router: {e}")
