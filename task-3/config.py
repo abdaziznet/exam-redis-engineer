@@ -9,5 +9,5 @@ HEADERS = {
 
 # Redis Data Access - Connection Details
 # These will be used for connecting to the Redis DB once created
-REDIS_HOST = "re-cluster1.ps-redislabs.org"
+REDIS_HOST = "redis-10218.re-cluster1.ps-redislabs.org:10218"
 REDIS_PW = ""  # For simplicity, unauthenticated access is allowed
