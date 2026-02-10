@@ -4,9 +4,9 @@ import sys
 
 import urllib3
 import numpy as np
-import redis
 from redisvl.index import SearchIndex
 from redisvl.schema import IndexSchema
+from redisvl.redis.utils import array_to_buffer
 from sentence_transformers import SentenceTransformer
 
 # Suppress warnings
@@ -49,11 +49,8 @@ schema = IndexSchema.from_dict({
 })
 
 def _to_embedding_bytes(vec):
-    # Ensure vector is stored as float32 bytes for Redis vector fields
-    try:
-        return vec.astype(np.float32).tobytes()
-    except AttributeError:
-        return np.array(vec, dtype=np.float32).tobytes()
+    # Official RedisVL helper to store vector bytes in HASH storage
+    return array_to_buffer(vec, dtype="float32")
 
 def setup_router():
     """Create index and load route reference embeddings"""
@@ -62,8 +59,6 @@ def setup_router():
     # Create index in Redis (requires RediSearch module)
     index.create(overwrite=True)
 
-    client = redis.Redis.from_url(REDIS_URL)
-    
     # Process each route's references
     data_to_load = []
     for route_name, references in ROUTES.items():
@@ -76,49 +71,34 @@ def setup_router():
                 "embedding": embedding
             }
             data_to_load.append(doc)
+    
+    # Load via RedisVL (expects bytes for vector fields)
+    index.load(data_to_load)
+    return index
 
-    pipe = client.pipeline()
-    for i, doc in enumerate(data_to_load):
-        key = f"route:{i}"
-        pipe.hset(key, mapping=doc)
-    pipe.execute()
-
-    return index, client
-
-def route_query(client, query: str):
+def route_query(index, query: str):
     """Find the best route for a given query"""
     # Convert query to vector
     query_embedding = _to_embedding_bytes(model.encode(query))
     
-    # Perform Vector Similarity Search (VSS) via FT.SEARCH
-    res = client.execute_command(
-        "FT.SEARCH",
-        "semantic-router-index",
-        "*=>[KNN 1 @embedding $vec AS score]",
-        "PARAMS", 2, "vec", query_embedding,
-        "RETURN", 1, "route_name",
-        "SORTBY", "score",
-        "DIALECT", 2
+    # Perform Vector Similarity Search (VSS) via RedisVL
+    results = index.query(
+        vector=query_embedding,
+        vector_field="embedding",
+        return_fields=["route_name"],
+        num_results=1
     )
-
-    if res and res[0] > 0:
-        fields = res[2]
-        route_name = None
-        for i in range(0, len(fields), 2):
-            if fields[i] == "route_name":
-                route_name = fields[i + 1]
-                break
-        if route_name is not None:
-            print(route_name)
-        else:
-            print("No suitable route found")
+    
+    if results.docs:
+        # AS PER REQUIREMENT: Show only the name of the route
+        print(results.docs[0].route_name)
     else:
         print("No suitable route found")
 
 if __name__ == "__main__":
     try:
         # Initialize and load data
-        idx, client = setup_router()
+        idx = setup_router()
         
         # Test Queries
         test_queries = [
@@ -129,7 +109,7 @@ if __name__ == "__main__":
         
         for q in test_queries:
             # print(f"Query: '{q}' -> Route: ", end="")
-            route_query(client, q)
+            route_query(idx, q)
             
     except Exception as e:
         print(f"Error in Semantic Router: {e}")
