@@ -47,6 +47,13 @@ schema = IndexSchema.from_dict({
     ]
 })
 
+def _to_embedding_bytes(vec):
+    # Ensure vector is stored as float32 bytes for Redis vector fields
+    try:
+        return vec.astype(np.float32).tobytes()
+    except AttributeError:
+        return np.array(vec, dtype=np.float32).tobytes()
+
 def setup_router():
     """Create index and load route reference embeddings"""
     index = SearchIndex(schema, redis_url=REDIS_URL)
@@ -60,7 +67,7 @@ def setup_router():
         # Represent the route by the average or combined embedding of its references
         # For simplicity, we create an entry for each reference sentence
         for ref in references:
-            embedding = model.encode(ref).astype(np.float32).tobytes()
+            embedding = _to_embedding_bytes(model.encode(ref))
             data_to_load.append({
                 "route_name": route_name,
                 "embedding": embedding
@@ -72,7 +79,7 @@ def setup_router():
 def route_query(index, query: str):
     """Find the best route for a given query"""
     # Convert query to vector
-    query_embedding = model.encode(query).astype(np.float32).tobytes()
+    query_embedding = _to_embedding_bytes(model.encode(query))
     
     # Perform Vector Similarity Search (VSS)
     results = index.query(
