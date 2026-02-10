@@ -137,7 +137,7 @@ def create_role(db_uid, role_name, redis_acl):
 
     return role_uid
 
-def create_new_user(email, name, role_uid):
+def create_new_user(email, name, role_uid, role_name):
     """Create a new cluster user and assign a role"""
     # If user already exists, delete it before re-creating
     r_existing = requests.get(f"{BASE_URL}/v1/users", auth=auth, verify=False)
@@ -160,6 +160,7 @@ def create_new_user(email, name, role_uid):
         "email": email,
         "name": name,
         "password": "TempPass123!",
+        "role": role_name,
         "role_uids": [role_uid]
     }
 
@@ -214,25 +215,23 @@ def delete_database(db_id):
 
 if __name__ == "__main__":
     try:
-        list_all_roles()
-
         # 1. Database Creation
         
-        # db_uid = create_database()
-        # wait_db_ready(db_uid, 60)
+        db_uid = create_database()
+        wait_db_ready(db_uid, 60)
 
-        # # 2. Role Creation & Linking
-        # viewer_role = create_role(db_uid, "db_viewer", "+@read -@write")
-        # member_role = create_role(db_uid, "db_member", "+@all")
+        # 2. Role Creation & Linking
+        viewer_role = create_role(db_uid, "db_viewer", "+@read -@write")
+        member_role = create_role(db_uid, "db_member", "+@all")
 
-        # # 3. User Creation
-        # create_new_user("john.doe@example.com", "John Doe", viewer_role)
-        # create_new_user("mike.smith@example.com", "Mike Smith", member_role)
-        # create_new_user("cary.johnson@example.com", "Cary Johnson", 1)  # Admin role
+        # 3. User Creation
+        create_new_user("john.doe@example.com", "John Doe", viewer_role, "db_viewer")
+        create_new_user("mike.smith@example.com", "Mike Smith", member_role, "db_member")
+        create_new_user("cary.johnson@example.com", "Cary Johnson", 1, "admin")  # Admin role
 
-        # # 4. Results
-        # list_users()
-        # list_users_2()
+        # 4. Results
+        list_users()
+        list_users_2()
 
         # 5. Cleanup (Commented as per request to keep the result visible)
         # delete_database(db_uid)
