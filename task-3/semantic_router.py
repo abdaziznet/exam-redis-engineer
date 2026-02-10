@@ -8,6 +8,7 @@ from redisvl.index import SearchIndex
 from redisvl.schema import IndexSchema
 from redisvl.redis.utils import array_to_buffer
 from sentence_transformers import SentenceTransformer
+from redis import Redis
 
 # Suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -22,7 +23,7 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # 2. Get Database Connection Info
 # Port is written by create_task3_db.py
-REDIS_PORT = 12000
+REDIS_PORT = 10218
 port = REDIS_PORT
 
 if REDIS_PW:
@@ -59,39 +60,49 @@ def setup_router():
     # Create index in Redis (requires RediSearch module)
     index.create(overwrite=True)
 
-    # Process each route's references
-    data_to_load = []
+    # Load data manually via Redis client to avoid the list conversion issue
+    redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
+    
+    pipe = redis_client.pipeline()
+    doc_id = 0
+    
     for route_name, references in ROUTES.items():
         for ref in references:
-            # JANGAN convert ke bytes di sini - biarkan sebagai numpy array
-            embedding = model.encode(ref)  # Ini akan return numpy array
-            doc = {
+            # Encode reference to embedding
+            embedding = model.encode(ref)
+            # Convert to bytes format that Redis accepts
+            embedding_bytes = array_to_buffer(embedding, dtype="float32")
+            
+            # Store as HASH with proper key prefix
+            key = f"route:{doc_id}"
+            pipe.hset(key, mapping={
                 "route_name": route_name,
-                "embedding": embedding.tolist()  # Convert numpy ke list Python
-            }
-            data_to_load.append(doc)
+                "embedding": embedding_bytes
+            })
+            doc_id += 1
     
-    # RedisVL akan handle konversi ke bytes secara internal
-    index.load(data_to_load, keys=[f"route:{i}" for i in range(len(data_to_load))])
+    # Execute all commands
+    pipe.execute()
+    redis_client.close()
+    
     return index
 
 def route_query(index, query: str):
     """Find the best route for a given query"""
-    # Untuk query, TETAP gunakan numpy array atau list
-    query_embedding = model.encode(query).tolist()  # Convert ke list
+    # Convert query to vector (as numpy array first, then to bytes)
+    query_embedding = model.encode(query)
+    query_embedding_bytes = array_to_buffer(query_embedding, dtype="float32")
     
-    # Perform Vector Similarity Search (VSS) via RedisVL
-    results = index.query(
+    # Perform Vector Similarity Search via RedisVL
+    results = index.search(
+        query_embedding_bytes,
+        vector_field_name="embedding",
         return_fields=["route_name"],
         num_results=1
-    ).vector(
-        vector=query_embedding,
-        field="embedding",
-        distance_threshold=1.0  # Optional: untuk cosine similarity
     )
     
-    if results:
-        print(results[0]["route_name"])
+    if results.docs:
+        print(results.docs[0].route_name)
     else:
         print("No suitable route found")
 
@@ -108,7 +119,6 @@ if __name__ == "__main__":
         ]
         
         for q in test_queries:
-            # print(f"Query: '{q}' -> Route: ", end="")
             route_query(idx, q)
             
     except Exception as e:
