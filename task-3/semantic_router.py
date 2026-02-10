@@ -20,11 +20,14 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # 2. Get Database Connection Info
 default_port = 12000
-db_info_path = os.path.join(os.path.dirname(__file__), "db_info.json")
-port = default_port
-if os.path.exists(db_info_path):
-    with open(db_info_path, "r") as f:
-        port = json.load(f).get("port", default_port)
+port_env = os.getenv("REDIS_PORT")
+if port_env:
+    try:
+        port = int(port_env)
+    except ValueError:
+        port = default_port
+else:
+    port = default_port
 
 if REDIS_PW:
     REDIS_URL = f"redis://:{REDIS_PW}@{REDIS_HOST}:{port}"
