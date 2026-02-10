@@ -198,6 +198,14 @@ def check_existing_databases():
     print(r.json())
     
 
+def list_all_roles():
+    """Debug: List all available roles in the cluster"""
+    print("\n[DEBUG] All available roles:")
+    r = requests.get(f"{BASE_URL}/v1/roles", auth=auth, verify=False)
+    if r.status_code == 200:
+        for role in r.json():
+            print(f"  UID: {role['uid']}, Name: {role['name']}, Management: {role.get('management', 'N/A')}")
+    print()
 
 def delete_database(db_id):
     """Delete the specified database"""
@@ -206,23 +214,25 @@ def delete_database(db_id):
 
 if __name__ == "__main__":
     try:
+        list_all_roles()
+
         # 1. Database Creation
         
-        db_uid = create_database()
-        wait_db_ready(db_uid, 60)
+        # db_uid = create_database()
+        # wait_db_ready(db_uid, 60)
 
-        # 2. Role Creation & Linking
-        viewer_role = create_role(db_uid, "db_viewer", "+@read -@write")
-        member_role = create_role(db_uid, "db_member", "+@all")
+        # # 2. Role Creation & Linking
+        # viewer_role = create_role(db_uid, "db_viewer", "+@read -@write")
+        # member_role = create_role(db_uid, "db_member", "+@all")
 
-        # 3. User Creation
-        create_new_user("john.doe@example.com", "John Doe", viewer_role)
-        create_new_user("mike.smith@example.com", "Mike Smith", member_role)
-        create_new_user("cary.johnson@example.com", "Cary Johnson", 1)  # Admin role
+        # # 3. User Creation
+        # create_new_user("john.doe@example.com", "John Doe", viewer_role)
+        # create_new_user("mike.smith@example.com", "Mike Smith", member_role)
+        # create_new_user("cary.johnson@example.com", "Cary Johnson", 1)  # Admin role
 
-        # 4. Results
-        list_users()
-        list_users_2()
+        # # 4. Results
+        # list_users()
+        # list_users_2()
 
         # 5. Cleanup (Commented as per request to keep the result visible)
         # delete_database(db_uid)
