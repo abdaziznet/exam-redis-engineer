@@ -255,10 +255,9 @@ if __name__ == "__main__":
 
         # 4. Results
         list_users()
-        list_users_2()
 
         # 5. Cleanup (Commented as per request to keep the result visible)
-        # delete_database(db_uid)
+        delete_database(db_uid)
         print("Script execution completed successfully.")
 
     except Exception as e:
