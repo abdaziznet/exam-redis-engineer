@@ -68,10 +68,17 @@ def setup_router():
         # For simplicity, we create an entry for each reference sentence
         for ref in references:
             embedding = _to_embedding_bytes(model.encode(ref))
-            data_to_load.append({
+            doc = {
                 "route_name": route_name,
                 "embedding": embedding
-            })
+            }
+            data_to_load.append(doc)
+
+    # Debug: ensure no list values sneak in
+    for i, doc in enumerate(data_to_load[:5]):
+        for k, v in doc.items():
+            if isinstance(v, list):
+                raise TypeError(f"Found list in doc[{i}]['{k}']")
     
     index.load(data_to_load)
     return index
