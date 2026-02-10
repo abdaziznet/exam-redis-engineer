@@ -122,6 +122,14 @@ def create_role(db_uid, role_name, redis_acl):
 
 def create_new_user(email, name, role_uid):
     """Create a new cluster user and assign a role"""
+    # Skip creation if user already exists (idempotent)
+    r_existing = requests.get(f"{BASE_URL}/v1/users", auth=auth, verify=False)
+    if r_existing.status_code == 200:
+        for u in r_existing.json():
+            if u.get("email") == email:
+                print(f"[User] User '{name}' ({email}) already exists. Skipping creation.")
+                return
+
     payload = {
         "email": email,
         "name": name,
