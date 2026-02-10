@@ -62,36 +62,36 @@ def setup_router():
     # Process each route's references
     data_to_load = []
     for route_name, references in ROUTES.items():
-        # Represent the route by the average or combined embedding of its references
-        # For simplicity, we create an entry for each reference sentence
         for ref in references:
-            embedding = _to_embedding_bytes(model.encode(ref))
+            # JANGAN convert ke bytes di sini - biarkan sebagai numpy array
+            embedding = model.encode(ref)  # Ini akan return numpy array
             doc = {
                 "route_name": route_name,
-                "embedding": embedding
+                "embedding": embedding.tolist()  # Convert numpy ke list Python
             }
             data_to_load.append(doc)
     
-    # Load via RedisVL (expects bytes for vector fields)
-    index.load(data_to_load)
+    # RedisVL akan handle konversi ke bytes secara internal
+    index.load(data_to_load, keys=[f"route:{i}" for i in range(len(data_to_load))])
     return index
 
 def route_query(index, query: str):
     """Find the best route for a given query"""
-    # Convert query to vector
-    query_embedding = _to_embedding_bytes(model.encode(query))
+    # Untuk query, TETAP gunakan numpy array atau list
+    query_embedding = model.encode(query).tolist()  # Convert ke list
     
     # Perform Vector Similarity Search (VSS) via RedisVL
     results = index.query(
-        vector=query_embedding,
-        vector_field="embedding",
         return_fields=["route_name"],
         num_results=1
+    ).vector(
+        vector=query_embedding,
+        field="embedding",
+        distance_threshold=1.0  # Optional: untuk cosine similarity
     )
     
-    if results.docs:
-        # AS PER REQUIREMENT: Show only the name of the route
-        print(results.docs[0].route_name)
+    if results:
+        print(results[0]["route_name"])
     else:
         print("No suitable route found")
 
