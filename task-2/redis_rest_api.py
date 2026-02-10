@@ -11,6 +11,23 @@ auth = HTTPBasicAuth(USERNAME, PASSWORD)
 
 def create_database():
     """Create a new Redis database (BDB)"""
+    # If DB with same name exists, delete it first (idempotent)
+    r_existing = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False)
+    if r_existing.status_code == 200:
+        for db in r_existing.json():
+            if db.get("name") == "exam-db":
+                existing_uid = db.get("uid")
+                print(f"[DB] Existing database 'exam-db' found (UID: {existing_uid}). Deleting...")
+                requests.delete(f"{BASE_URL}/v1/bdbs/{existing_uid}", auth=auth, verify=False)
+                # Wait until the DB is gone before recreating
+                for _ in range(30):
+                    r_check = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False)
+                    if r_check.status_code == 200:
+                        if not any(b.get("uid") == existing_uid for b in r_check.json()):
+                            break
+                    time.sleep(2)
+                break
+
     payload = {
         "name": "exam-db",
         "type": "redis",
@@ -168,9 +185,7 @@ def delete_database(db_id):
 if __name__ == "__main__":
     try:
         # 1. Database Creation
-        # Panggil sebelum create_database()
-        check_existing_databases()
-
+        
         db_uid = create_database()
         wait_db_ready(db_uid, 60)
 
