@@ -29,7 +29,7 @@ def create_database():
                 break
 
     payload = {
-        "name": "exam-db",
+        "name": "semantic-db",
         "type": "redis",
         "memory_size": 1024 * 1024 * 1024,
         "port": 14000,  # 1GB
