@@ -141,6 +141,15 @@ def list_users():
         print(f"Name: {u['name']:<15} | Roles: {str(u['role_uids']):<10} | Email: {u['email']}")
     print("="*50 + "\n")
 
+# Tambahkan ini di awal script untuk debugging
+def check_existing_databases():
+    """Check what databases already exist"""
+    r = requests.get(f"{BASE_URL}/v1/bdbs", auth=auth, verify=False)
+    print(f"[Debug] Existing databases:")
+    print(r.json())
+    
+
+
 def delete_database(db_id):
     """Delete the specified database"""
     print(f"[Clean] Deleting database {db_id}...")
@@ -149,6 +158,9 @@ def delete_database(db_id):
 if __name__ == "__main__":
     try:
         # 1. Database Creation
+        # Panggil sebelum create_database()
+        check_existing_databases()
+
         db_uid = create_database()
         wait_db_ready(db_uid, 60)
 
