@@ -3,6 +3,7 @@ import os
 import sys
 
 import urllib3
+import numpy as np
 from redisvl.index import SearchIndex
 from redisvl.schema import IndexSchema
 from sentence_transformers import SentenceTransformer
@@ -40,7 +41,8 @@ schema = IndexSchema.from_dict({
         {"name": "embedding", "type": "vector", "attrs": {
             "dims": 384,
             "algorithm": "flat",       # Exact search for accuracy
-            "distance_metric": "cosine"
+            "distance_metric": "cosine",
+            "datatype": "float32"
         }}
     ]
 })
@@ -58,7 +60,7 @@ def setup_router():
         # Represent the route by the average or combined embedding of its references
         # For simplicity, we create an entry for each reference sentence
         for ref in references:
-            embedding = model.encode(ref).tolist()
+            embedding = model.encode(ref).astype(np.float32).tobytes()
             data_to_load.append({
                 "route_name": route_name,
                 "embedding": embedding
@@ -70,7 +72,7 @@ def setup_router():
 def route_query(index, query: str):
     """Find the best route for a given query"""
     # Convert query to vector
-    query_embedding = model.encode(query).tolist()
+    query_embedding = model.encode(query).astype(np.float32).tobytes()
     
     # Perform Vector Similarity Search (VSS)
     results = index.query(
