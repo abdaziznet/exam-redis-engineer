@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import tempfile
+from urllib.parse import urlparse
 
 import requests
 
@@ -322,6 +323,40 @@ def update_semantic_router_port(port: int):
     except OSError as e:
         print(f"[Task 3][WARN] Failed to write {router_path}: {e}")
 
+def update_config_host(port: int):
+    config_path = os.path.join(os.path.dirname(__file__), "config.py")
+    try:
+        with open(config_path, "r") as f:
+            content = f.read()
+    except OSError as e:
+        print(f"[Task 3][WARN] Failed to read {config_path}: {e}")
+        return
+
+    base_host = urlparse(BASE_URL).hostname or ""
+    if not base_host:
+        print("[Task 3][WARN] Could not parse BASE_URL to derive REDIS_HOST")
+        return
+
+    new_host = f"redis-{port}.{base_host}"
+    new_line = f'REDIS_HOST = "{new_host}"'
+    if "REDIS_HOST" in content:
+        updated = []
+        for line in content.splitlines():
+            if line.strip().startswith("REDIS_HOST"):
+                updated.append(new_line)
+            else:
+                updated.append(line)
+        new_content = "\n".join(updated) + ("\n" if content.endswith("\n") else "")
+    else:
+        new_content = f"{new_line}\n" + content
+
+    try:
+        with open(config_path, "w") as f:
+            f.write(new_content)
+        print(f"[Task 3] Updated config.py with REDIS_HOST={new_host}")
+    except OSError as e:
+        print(f"[Task 3][WARN] Failed to write {config_path}: {e}")
+
 if __name__ == "__main__":
     try:
         delete_db_if_exists(DB_NAME)
@@ -331,6 +366,7 @@ if __name__ == "__main__":
         if port == 0:
             port = resolve_port_from_list(uid)
         
+        update_config_host(port)
         update_semantic_router_port(port)
         print(f"[Task 3] DB port is {port}. Run semantic_router.py directly.")
             
