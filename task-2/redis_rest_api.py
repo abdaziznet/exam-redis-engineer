@@ -14,9 +14,11 @@ def create_database():
     payload = {
         "name": "exam-db",
         "type": "redis",
-        "memory_size": 1024 * 1024 * 1024,  # 1GB
+        "memory_size": 1024 * 1024 * 1024,
+        "port": 14000,  # 1GB
         "shards_count": 1,
-        "replication": False
+        "replication": False,
+        "proxy_policy": "single"
     }
     r = requests.post(f"{BASE_URL}/v1/bdbs", json=payload, headers=HEADERS, auth=auth, verify=False)
     
