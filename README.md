@@ -1,5 +1,8 @@
 Redis Professional Services Consultant Technical Challenge
 
+A little bit about this environment:
+![A little bit about this environment](image.png)
+
 Overview
 This repository contains solutions for three exercises:
 - Exercise 1: Redis database replication + data verification
@@ -65,7 +68,7 @@ EOF
 ```
 
 Step 4: Insert 1-100 and read reverse from replica
-Use `task-1/replication_test.py` (LIST-based implementation).
+Use `task-1/task1.py` (LIST-based implementation).
 
 ```bash
 python task-1/task1.py
@@ -77,7 +80,7 @@ Possible Redis structures for values 1-100:
 - Sorted Set (ZADD + ZREVRANGE): natural reverse order using score
 - String keys (num:1 ... num:100): simple to insert, reverse ordering done by sorting keys
 
-Chosen approach in `task-1/replication_test.py`: List. It preserves insertion order and is the most direct fit for sequential values and reverse reads.
+Chosen approach in `task-1/task1.py`: List. It preserves insertion order and is the most direct fit for sequential values and reverse reads.
 
 Exercise 2: Working with Redis REST API
 
