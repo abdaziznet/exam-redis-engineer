@@ -19,15 +19,9 @@ from embeddings.routes import ROUTES
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # 2. Get Database Connection Info
-default_port = 12000
-port_env = os.getenv("REDIS_PORT")
-if port_env:
-    try:
-        port = int(port_env)
-    except ValueError:
-        port = default_port
-else:
-    port = default_port
+# Port is written by create_task3_db.py
+REDIS_PORT = 12000
+port = REDIS_PORT
 
 if REDIS_PW:
     REDIS_URL = f"redis://:{REDIS_PW}@{REDIS_HOST}:{port}"

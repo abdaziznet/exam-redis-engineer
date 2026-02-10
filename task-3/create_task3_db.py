@@ -290,6 +290,38 @@ def delete_db_if_exists(db_name: str):
         time.sleep(2)
     print(f"[Task 3][WARN] DB '{db_name}' delete not confirmed yet, proceeding anyway.")
 
+def update_semantic_router_port(port: int):
+    router_path = os.path.join(os.path.dirname(__file__), "semantic_router.py")
+    try:
+        with open(router_path, "r") as f:
+            content = f.read()
+    except OSError as e:
+        print(f"[Task 3][WARN] Failed to read {router_path}: {e}")
+        return
+
+    new_line = f"REDIS_PORT = {port}"
+    if "REDIS_PORT =" in content:
+        updated = []
+        for line in content.splitlines():
+            if line.strip().startswith("REDIS_PORT ="):
+                updated.append(new_line)
+            else:
+                updated.append(line)
+        new_content = "\n".join(updated) + ("\n" if content.endswith("\n") else "")
+    else:
+        marker = "# 2. Get Database Connection Info"
+        if marker in content:
+            new_content = content.replace(marker, f"{marker}\n{new_line}", 1)
+        else:
+            new_content = f"{new_line}\n" + content
+
+    try:
+        with open(router_path, "w") as f:
+            f.write(new_content)
+        print(f"[Task 3] Updated semantic_router.py with REDIS_PORT={port}")
+    except OSError as e:
+        print(f"[Task 3][WARN] Failed to write {router_path}: {e}")
+
 if __name__ == "__main__":
     try:
         delete_db_if_exists(DB_NAME)
@@ -299,8 +331,8 @@ if __name__ == "__main__":
         if port == 0:
             port = resolve_port_from_list(uid)
         
-        # Save connection info for semantic_router.py
-        print(f"[Task 3] DB port is {port}. Set REDIS_PORT before running semantic_router.py")
+        update_semantic_router_port(port)
+        print(f"[Task 3] DB port is {port}. Run semantic_router.py directly.")
             
     except Exception as e:
         print(f"Error: {e}")
