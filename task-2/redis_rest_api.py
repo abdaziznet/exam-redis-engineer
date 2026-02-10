@@ -88,16 +88,41 @@ def create_role(db_uid, role_name, redis_acl):
             if r_item["name"] == role_name:
                 role_uid = r_item["uid"]
                 print(f"[Role] Reusing existing role '{role_name}' (UID: {role_uid})")
+                
+                # Check and update management if needed
+                if r_item.get("management") == "none":
+                    # Try to update to db_member management
+                    mgmt_level = "db_member" if "member" in role_name else "db_viewer"
+                    update_payload = {"management": mgmt_level}
+                    r_upd = requests.put(
+                        f"{BASE_URL}/v1/roles/{role_uid}",
+                        json=update_payload,
+                        headers=HEADERS,
+                        auth=auth,
+                        verify=False
+                    )
+                    if r_upd.status_code == 200:
+                        print(f"[Role] Updated management level to '{mgmt_level}'")
+                
                 break
 
     # 3. Create role if not exists
     if not role_uid:
+        # Set management based on role name
+        mgmt_level = "db_member" if "member" in role_name else "db_viewer"
+
         payload = {
             "name": role_name,
-            "management": "none"
+            "management": mgmt_level  # Change from "none" to specific level
         }
         r = requests.post(f"{BASE_URL}/v1/roles", json=payload, headers=HEADERS, auth=auth, verify=False)
-        print(f"[Role] Creating role '{role_name}'... Status: {r.status_code}")
+        print(f"[Role] Creating role '{role_name}' with management '{mgmt_level}'... Status: {r.status_code}")
+        if r.status_code != 200:
+            try:
+                print(f"[ERROR] Role creation failed: {r.json()}")
+            except:
+                print(f"[ERROR] Role creation raw: {r.text}")
+        
         r.raise_for_status()
         role_uid = r.json()["uid"]
 
@@ -137,7 +162,7 @@ def create_role(db_uid, role_name, redis_acl):
 
     return role_uid
 
-def create_new_user(email, name, role_uid, role_name):
+def create_new_user(email, name, role_uid):
     """Create a new cluster user and assign a role"""
     # If user already exists, delete it before re-creating
     r_existing = requests.get(f"{BASE_URL}/v1/users", auth=auth, verify=False)
@@ -160,7 +185,6 @@ def create_new_user(email, name, role_uid, role_name):
         "email": email,
         "name": name,
         "password": "TempPass123!",
-        "role": role_name,
         "role_uids": [role_uid]
     }
 
@@ -225,9 +249,9 @@ if __name__ == "__main__":
         member_role = create_role(db_uid, "db_member", "+@all")
 
         # 3. User Creation
-        create_new_user("john.doe@example.com", "John Doe", viewer_role, "db_viewer")
-        create_new_user("mike.smith@example.com", "Mike Smith", member_role, "db_member")
-        create_new_user("cary.johnson@example.com", "Cary Johnson", 1, "admin")  # Admin role
+        create_new_user("john.doe@example.com", "John Doe", viewer_role)
+        create_new_user("mike.smith@example.com", "Mike Smith", member_role)
+        create_new_user("cary.johnson@example.com", "Cary Johnson", 1)  # Admin role
 
         # 4. Results
         list_users()
