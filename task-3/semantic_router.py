@@ -9,6 +9,7 @@ from redisvl.schema import IndexSchema
 from redisvl.redis.utils import array_to_buffer
 from sentence_transformers import SentenceTransformer
 from redis import Redis
+from redisvl.query import VectorQuery 
 
 # Suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -89,20 +90,23 @@ def setup_router():
 
 def route_query(index, query: str):
     """Find the best route for a given query"""
-    # Convert query to vector (as numpy array first, then to bytes)
+    # Convert query to vector
     query_embedding = model.encode(query)
-    query_embedding_bytes = array_to_buffer(query_embedding, dtype="float32")
     
-    # Perform Vector Similarity Search via RedisVL
-    results = index.search(
-        query_embedding_bytes,
+    # Create VectorQuery object - INI CARA YANG BENAR
+    vq = VectorQuery(
+        vector=query_embedding,
         vector_field_name="embedding",
         return_fields=["route_name"],
         num_results=1
     )
     
-    if results.docs:
-        print(results.docs[0].route_name)
+    # Execute query
+    results = index.query(vq)
+    
+    if results:
+        # results adalah list of dicts
+        print(results[0]["route_name"])
     else:
         print("No suitable route found")
 
